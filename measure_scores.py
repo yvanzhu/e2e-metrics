@@ -47,13 +47,17 @@ def create_coco_sys(sys):
 
 
 def evaluate(ref_file, sys_file):
-    refs = create_coco_refs(read_lines(ref_file, multi_ref=True))
+    """Main procedure, running the COCO evaluator on the given files."""
 
+    # create references in-memory
+    refs = create_coco_refs(read_lines(ref_file, multi_ref=True))
+    # create test file (in a temporary file)
     sys = create_coco_sys(read_lines(sys_file))
     _, sys_tmp_file = mkstemp(prefix='cocowrapper')
     with open(sys_tmp_file, 'wb') as sys_tmp_fh:
         json.dump(sys, sys_tmp_fh)
 
+    # run the COCO evaluator
     coco = COCO()
     coco.dataset = refs
     coco.createIndex()
@@ -61,8 +65,12 @@ def evaluate(ref_file, sys_file):
     coco_res = coco.loadRes(sys_tmp_file)
     coco_eval = COCOEvalCap(coco, coco_res)
     coco_eval.evaluate()
+
+    print 'SCORES:\n=============='
     for metric, score in coco_eval.eval.items():
         print '%s: %.4f' % (metric, score)
+    # delete the temporary file
+    os.remove(sys_tmp_file)
 
 
 if __name__ == '__main__':
