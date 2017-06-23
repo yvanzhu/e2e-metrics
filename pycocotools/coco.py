@@ -45,7 +45,7 @@ __version__ = '1.0.1'
 
 import json
 import datetime
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
 import numpy as np
@@ -230,7 +230,7 @@ class COCO:
         if len(anns) == 0:
             return 0
         if self.dataset['type'] == 'instances':
-            ax = plt.gca()
+            #ax = plt.gca()
             polygons = []
             color = []
             for ann in anns:
@@ -251,9 +251,9 @@ class COCO:
                         color_mask = np.random.random((1, 3)).tolist()[0]
                     for i in range(3):
                         img[:,:,i] = color_mask[i]
-                    ax.imshow(np.dstack( (img, mask*0.5) ))
+                    #ax.imshow(np.dstack( (img, mask*0.5) ))
             p = PatchCollection(polygons, facecolors=color, edgecolors=(0,0,0,1), linewidths=3, alpha=0.4)
-            ax.add_collection(p)
+            #ax.add_collection(p)
         if self.dataset['type'] == 'captions':
             for ann in anns:
                 print ann['caption']
