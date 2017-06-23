@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use warnings;
 use strict;
@@ -124,7 +124,7 @@ binmode STDERR, ":utf8";
 my ($date, $time) = date_time_stamp();
 print "MT evaluation scorer began on $date at $time\n";
 print "command line:  ", $0, " ", join(" ", @ARGV), "\n";
-my $usage = "\n\nUsage: $0 -r <ref_file> -s <src_file> -t <tst_file>\n\n".
+my $usage = "\n\nUsage: $0 -r <ref_file> -s <src_file> -t <tst_file> -f <stats_file>\n\n".
     "Description:  This Perl script evaluates MT system performance.\n".
     "\n".
     "Required arguments:\n".
@@ -158,7 +158,7 @@ my $usage = "\n\nUsage: $0 -r <ref_file> -s <src_file> -t <tst_file>\n\n".
     "  --no-smoothing : disable smoothing on BLEU scores\n" .
     "  -f <stats_file> is the output file for segment-level stats (for performing significance tests)\n".
     "\n";
- 
+
 use vars qw ($opt_r $opt_s $opt_t $opt_d $opt_h $opt_b $opt_n $opt_c $opt_x $opt_e $opt_f);
 use Getopt::Long;
 my $ref_file = '';
@@ -224,7 +224,7 @@ my $METHOD = "BOTH";
 if ( $opt_b ) { $METHOD = "BLEU"; }
 if ( $opt_n ) { $METHOD = "NIST"; }
 my $method;
- 
+
 ######
 # Global variables
 my ($src_lang, $tgt_lang, @tst_sys, @ref_sys); # evaluation parameters
@@ -269,7 +269,7 @@ foreach my $doc (sort keys %eval_docs)
 print "    src set \"$src_id\" (", scalar keys %eval_docs, " docs, $cum_seg segs)\n";
 print "    ref set \"$ref_id\" (", scalar keys %ref_data, " refs)\n";
 print "    tst set \"$tst_id\" (", scalar keys %tst_data, " systems)\n\n";
- 
+
 foreach my $sys (sort @tst_sys)
 {
 	for (my $n=1; $n<=$max_Ngram; $n++)
