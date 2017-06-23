@@ -9,9 +9,11 @@ MT-Eval
 
 We used the NIST MT-Eval v13a script adapted for significance tests, from 
 <http://www.cs.cmu.edu/~ark/MT/>.
-We adapted the script to allow a variable number of references:
+We adapted the script to allow a variable number of references.
+
+To use the script:
 * Create .sgm files with the maximum number of references available for any instance
-* Keep some of the references empty
+* Keep some of the references empty (if you have less for some instances)
 
 The NIST and BLEU brevity penalties are adjusted to ignore empty reference texts.
 
