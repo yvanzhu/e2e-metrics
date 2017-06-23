@@ -1,7 +1,25 @@
-Microsoft COCO Caption Evaluation
-===================
+E2E Evaluation metrics
+======================
 
-Evaluation codes for MS COCO caption generation.
+Adapted from MT-Eval + COCO Caption Evaluation scripts. A convenient way of running all of them 
+will appear soon.
+
+MT-Eval
+-------
+
+We used the NIST MT-Eval v13a script adapted for significance tests, from 
+<http://www.cs.cmu.edu/~ark/MT/>.
+We adapted the script to allow a variable number of references:
+* Create .sgm files with the maximum number of references available for any instance
+* Keep some of the references empty
+
+The NIST and BLEU brevity penalties are adjusted to ignore empty reference texts.
+
+
+Microsoft COCO Caption Evaluation scripts
+-----------------------------------------
+
+These provide a different variant of BLEU (not used here), METEOR, ROUGE-L, CIDER.
 
 ## Requirements ##
 - java 1.8.0
