@@ -2,7 +2,7 @@ E2E NLG Challenge Evaluation metrics
 ====================================
 
 The metrics used for the challenge include:
-* BLEU + NIST from [MT-Eval](#mt-eval)
+* BLEU + NIST from [MT-Eval](#mt-eval),
 * METEOR, ROUGE-L, CIDEr from the [MSCOCO Caption evaluation scripts](#microsoft-coco-caption-evaluation-scripts).
 
 So far, both evaluation scripts need to be run separately. A more convenient way of running the scripts will appear soon.
