@@ -1,8 +1,11 @@
-E2E Evaluation metrics
-======================
+E2E NLG Challenge Evaluation metrics
+====================================
 
-Adapted from MT-Eval + COCO Caption Evaluation scripts. A convenient way of running all of them 
-will appear soon.
+The metrics used for the challenge include:
+* BLEU + NIST from [MT-Eval](#mt-eval)
+* METEOR, ROUGE-L, CIDEr from the [MSCOCO Caption evaluation scripts](#microsoft-coco-caption-evaluation-scripts).
+
+So far, both evaluation scripts need to be run separately. A more convenient way of running the scripts will appear soon.
 
 MT-Eval
 -------
@@ -11,11 +14,40 @@ We used the NIST MT-Eval v13a script adapted for significance tests, from
 <http://www.cs.cmu.edu/~ark/MT/>.
 We adapted the script to allow a variable number of references.
 
-To use the script:
-* Create .sgm files with the maximum number of references available for any instance
-* Keep some of the references empty (if you have less for some instances)
+### Requirements ###
+- Perl 5.8.8 or higher
+- [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
 
-The NIST and BLEU brevity penalties are adjusted to ignore empty reference texts.
+### Usage ###
+
+1. __Convert the sources, references, and your system outputs into the `.sgm` format__
+
+   The `.sgm` files with the maximum number of references available for any instance.
+   If there are less references available for some instances, use empty references instead. 
+   These will be ignored by the script.
+
+   The `.sgm` files can be created using the [txt2sgm.py](https://github.com/UFAL-DSG/tgen/blob/master/util/txt2sgm.py)
+   script from the [TGen](https://github.com/UFAL-DSG/tgen) repository. 
+   
+   The script assumes plain text files with one instance per line on the input, as created 
+   by the initial [data conversion for TGen](https://github.com/UFAL-DSG/tgen/blob/master/e2e-challenge/README.md).
+   Multiple references for the same meaning representation (MR) should be separated by empty 
+   lines in the reference file (not source or system output file, where one output per MR is 
+   assumed).
+
+```
+~/tgen/util/txt2sgm.py -n e2e -l en -t ref -s manual -m devel-conc.txt devel-conc.sgm
+~/tgen/util/txt2sgm.py -n e2e -l en -t src -s source devel-das.txt devel-das.sgm
+~/tgen/util/txt2sgm.py -n e2e -l en -t test -s system outputs.txt outputs.sgm
+```
+
+2. __Run the MT-Eval script__
+
+   This prints out BLEU and NIST on the standard output.
+
+```
+./mteval/mteval-v13a-sig.pl -r devel-conc.sgm -s devel-das.sgm -t outputs.sgm -f mteval.log
+```
 
 
 Microsoft COCO Caption Evaluation scripts
