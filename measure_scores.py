@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 from tempfile import mkstemp
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
-
+import os
 
 def read_lines(file_name, multi_ref=False):
     buf = [[]] if multi_ref else []
