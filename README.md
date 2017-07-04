@@ -37,7 +37,7 @@ We adapted the script to allow a variable number of references.
 
 ```
 ~/tgen/util/txt2sgm.py -n e2e -l en -t ref -s manual -m devel-conc.txt devel-conc.sgm
-~/tgen/util/txt2sgm.py -n e2e -l en -t src -s source devel-das.txt devel-das.sgm
+~/tgen/util/txt2sgm.py -n e2e -l en -t src -s source devel-conc_das.txt devel-conc_das.sgm
 ~/tgen/util/txt2sgm.py -n e2e -l en -t test -s system outputs.txt outputs.sgm
 ```
 
@@ -46,7 +46,7 @@ We adapted the script to allow a variable number of references.
    This prints out BLEU and NIST on the standard output.
 
 ```
-./mteval/mteval-v13a-sig.pl -r devel-conc.sgm -s devel-das.sgm -t outputs.sgm -f mteval.log
+./mteval/mteval-v13a-sig.pl -r devel-conc.sgm -s devel-conc_das.sgm -t outputs.sgm -f mteval.log
 ```
 
 
