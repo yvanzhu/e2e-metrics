@@ -70,7 +70,7 @@ pip install -r requirements.txt
 The main entry point is [measure_scores.py](measure_scores.py). The script assumes one instance
 per line for your system outputs and one entry per line, multiple references for the same instance
 separated by empty lines for the references (see 
-[TGen data conversion]((https://github.com/UFAL-DSG/tgen/blob/master/e2e-challenge/README.md))).
+[TGen data conversion](https://github.com/UFAL-DSG/tgen/blob/master/e2e-challenge/README.md)).
 
 ```
 ./measure_scores.py devel-conc.txt outputs.txt
