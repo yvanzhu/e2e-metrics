@@ -5,62 +5,17 @@ The metrics used for the challenge include:
 * BLEU + NIST from [MT-Eval](#mt-eval),
 * METEOR, ROUGE-L, CIDEr from the [MSCOCO Caption evaluation scripts](#microsoft-coco-caption-evaluation-scripts).
 
-So far, both evaluation scripts need to be run separately. A more convenient way of running the scripts will appear soon.
+Running the evaluation
+----------------------
 
-MT-Eval
--------
-
-We used the NIST MT-Eval v13a script adapted for significance tests, from 
-<http://www.cs.cmu.edu/~ark/MT/>.
-We adapted the script to allow a variable number of references.
-
-### Requirements ###
-- Perl 5.8.8 or higher
-- [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
-
-### Usage ###
-
-1. __Convert the sources, references, and your system outputs into the `.sgm` format__
-
-   The `.sgm` files with the maximum number of references available for any instance.
-   If there are less references available for some instances, use empty references instead. 
-   These will be ignored by the script.
-
-   The `.sgm` files can be created using the [txt2sgm.py](https://github.com/UFAL-DSG/tgen/blob/master/util/txt2sgm.py)
-   script from the [TGen](https://github.com/UFAL-DSG/tgen) repository. 
-   
-   The script assumes plain text files with one instance per line on the input, as created 
-   by the initial [data conversion for TGen](https://github.com/UFAL-DSG/tgen/blob/master/e2e-challenge/README.md).
-   Multiple references for the same meaning representation (MR) should be separated by empty 
-   lines in the reference file (not source or system output file, where one output per MR is 
-   assumed).
-
-```
-~/tgen/util/txt2sgm.py -n e2e -l en -t ref -s manual -m devel-conc.txt devel-conc.sgm
-~/tgen/util/txt2sgm.py -n e2e -l en -t src -s source devel-conc_das.txt devel-conc_das.sgm
-~/tgen/util/txt2sgm.py -n e2e -l en -t test -s system outputs.txt outputs.sgm
-```
-
-2. __Run the MT-Eval script__
-
-   This prints out BLEU and NIST on the standard output.
-
-```
-./mteval/mteval-v13a-sig.pl -r devel-conc.sgm -s devel-conc_das.sgm -t outputs.sgm -f mteval.log
-```
-
-
-Microsoft COCO Caption Evaluation scripts
------------------------------------------
-
-These provide a different variant of BLEU (which is not used for evaluation in the E2E challenge), 
-METEOR, ROUGE-L, CIDER.
-
-### Requirements ###
+### Requirements/Installation ###
 
 - Java 1.8,
 - Python 2.7 with [matplotlib](https://pypi.python.org/pypi/matplotlib) and [scikit-image](https://pypi.python.org/pypi/scikit-image) packages. These can be installed using `pip`:
+- Perl 5.8.8 or higher with the [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
 
+
+To install the required Python packages, run:
 ```
 pip install -r requirements.txt
 ```
@@ -75,6 +30,21 @@ separated by empty lines for the references (see
 ```
 ./measure_scores.py devel-conc.txt outputs.txt
 ```
+
+Source metrics scripts
+----------------------
+
+### MT-Eval ###
+
+We used the NIST MT-Eval v13a script adapted for significance tests, from 
+<http://www.cs.cmu.edu/~ark/MT/>.
+We adapted the script to allow a variable number of references.
+
+
+### Microsoft COCO Caption Evaluation ###
+
+These provide a different variant of BLEU (which is not used for evaluation in the E2E challenge), 
+METEOR, ROUGE-L, CIDER. We used the [Github code for this script](https://github.com/tylin/coco-caption).
 
 
 References
