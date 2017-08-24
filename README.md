@@ -10,8 +10,8 @@ Running the evaluation
 
 ### Requirements/Installation ###
 
-- Java 1.8,
-- Python 2.7 with [matplotlib](https://pypi.python.org/pypi/matplotlib) and [scikit-image](https://pypi.python.org/pypi/scikit-image) packages. These can be installed using `pip`:
+- Java 1.8
+- Python 2.7 with [matplotlib](https://pypi.python.org/pypi/matplotlib) and [scikit-image](https://pypi.python.org/pypi/scikit-image) packages
 - Perl 5.8.8 or higher with the [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
 
 
