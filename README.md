@@ -10,7 +10,7 @@ Running the evaluation
 
 ### Requirements/Installation ###
 
-The scripts require the following:
+The metrics script requires the following dependencies:
 - Java 1.8
 - Python 2.7 with [matplotlib](https://pypi.python.org/pypi/matplotlib) and [scikit-image](https://pypi.python.org/pypi/scikit-image) packages
 - Perl 5.8.8 or higher with the [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
@@ -52,8 +52,8 @@ We adapted the script to allow a variable number of references.
 ### Microsoft COCO Caption Evaluation ###
 
 These provide a different variant of BLEU (which is not used for evaluation in the E2E challenge), 
-METEOR, ROUGE-L, CIDER. We used the [Github code for this script](https://github.com/tylin/coco-caption).
-The scripts are unchanged, apart from removing support for images and some of the dependencies.
+METEOR, ROUGE-L, CIDER. We used the [Github code for these metrics](https://github.com/tylin/coco-caption).
+The metrics are unchanged, apart from removing support for images and some of the dependencies.
 
 
 References
