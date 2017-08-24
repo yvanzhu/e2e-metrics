@@ -34,9 +34,11 @@ The main entry point is [measure_scores.py](measure_scores.py). The script assum
 per line for your system outputs and one entry per line, multiple references for the same instance
 separated by empty lines for the references (see 
 [TGen data conversion](https://github.com/UFAL-DSG/tgen/blob/master/e2e-challenge/README.md)).
+Example human reference and system output files are provided in the [example-inputs](example-inputs/)
+subdirectory.
 
 ```
-./measure_scores.py devel-conc.txt outputs.txt
+./measure_scores.py example-inputs/devel-conc.txt example-inputs/baseline-output.txt
 ```
 
 Source metrics scripts
