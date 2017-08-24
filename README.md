@@ -15,10 +15,17 @@ Running the evaluation
 - Perl 5.8.8 or higher with the [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
 
 
-To install the required Python packages, run:
+To install the required Python packages, run (assuming root access or [virtualenv](https://virtualenv.pypa.io/en/stable/)):
 ```
 pip install -r requirements.txt
 ```
+
+To install the required Perl module, run (assuming root access or [perlbrew](https://perlbrew.pl/)/[plenv](https://github.com/tokuhirom/plenv)):
+```
+curl -L https://cpanmin.us | perl - App::cpanminus  # install cpanm
+cpanm XML::Twig
+```
+
 
 ### Usage ###
 
