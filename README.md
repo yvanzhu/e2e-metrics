@@ -3,7 +3,7 @@ E2E NLG Challenge Evaluation metrics
 
 The metrics used for the challenge include:
 * BLEU + NIST from [MT-Eval](#mt-eval),
-* METEOR, ROUGE-L, CIDEr from the [MSCOCO Caption evaluation scripts](#microsoft-coco-caption-evaluation-scripts).
+* METEOR, ROUGE-L, CIDEr from the [MS-COCO Caption evaluation scripts](#microsoft-coco-caption-evaluation).
 
 Running the evaluation
 ----------------------
@@ -45,6 +45,8 @@ We adapted the script to allow a variable number of references.
 
 These provide a different variant of BLEU (which is not used for evaluation in the E2E challenge), 
 METEOR, ROUGE-L, CIDER. We used the [Github code for this script](https://github.com/tylin/coco-caption).
+The scripts are unchanged, apart from removing support for images and dependencies on graphical 
+libraries.
 
 
 References
