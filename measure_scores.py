@@ -34,6 +34,45 @@ def read_lines(file_name, multi_ref=False):
     return buf
 
 
+def read_and_check_tsv(sys_file, src_file):
+    # read
+    src_data = read_lines(src_file)
+    sys_data = [line.split("\t") for line in read_lines(sys_file) if line]  # ignore empty lines
+    if re.match(r'^"?mr', sys_data[0][0], re.I):  # ignore header
+        sys_data = sys_data[1:]
+
+    # check integrity
+    if len(sys_data) != len(src_data):
+        raise ValueError('SYS data of different length than SRC: %d' % len(sys_data))
+    errs = [line_no for line_no, item in enumerate(sys_data, start=1) if len(item) != 2]
+    if errs:
+        raise ValueError('Weird number of values on lines: %s' % str(errs))
+
+    # remove quotes
+    sys_srcs = []
+    sys_outs = []
+    for sys_src, sys_out in sys_data:
+        sys_src = re.sub(r'^\s*"?\s*', r'', sys_src)
+        sys_src = re.sub(r'\s*"?\s*$', r'', sys_src)
+        sys_out = re.sub(r'^\s*"?\s*', r'', sys_out)
+        sys_out = re.sub(r'\s*"?\s*$', r'', sys_out)
+        sys_srcs.append(sys_src)
+        sys_outs.append(sys_out)
+
+    # check sameness
+    errs = [line_no for line_no, (sys, ref) in enumerate(zip(sys_srcs, src_data), start=1)
+            if sys != ref]
+    if errs:
+        raise ValueError('The SRC fields in SYS data are not the same as reference SRC on lines: %s' % str(errs))
+    # check quotes
+    errs = [line_no for line_no, sys in enumerate(sys_outs, start=1) if '"' in sys]
+    if errs:
+        raise ValueError('Quotes on lines: %s' % errs)
+
+    # return the checked data
+    return sys_outs
+
+
 def create_coco_refs(data_ref):
     """Create MS-COCO human references JSON."""
     out = {'info': {}, 'licenses': [], 'images': [], 'type': 'captions', 'annotations': []}
@@ -88,12 +127,15 @@ def create_mteval_file(refs, path, file_type):
         fh.write('</%s>' % settype)
 
 
-def evaluate(ref_file, sys_file):
+def evaluate(ref_file, sys_file, src_file=None):
     """Main procedure, running the MS-COCO & MTEval evaluators on the given files."""
 
     # read input files
+    if src_file:
+        data_sys = read_and_check_tsv(sys_file, src_file)
+    else:
+        data_sys = read_lines(sys_file)
     data_ref = read_lines(ref_file, multi_ref=True)
-    data_sys = read_lines(sys_file)
     # dummy source files (have no effect on measures, but MTEval wants them)
     data_src = [''] * len(data_sys)
 
@@ -155,8 +197,11 @@ def evaluate(ref_file, sys_file):
 
 if __name__ == '__main__':
     ap = ArgumentParser(description='E2E Challenge evaluation -- MS-COCO & MTEval wrapper')
+    ap.add_argument('-s', '--src_file', type=str, help='source file -- if given, system output ' +
+                    'should be a TSV with source & output columns, source is checked for integrity',
+                    default=None)
     ap.add_argument('ref_file', type=str, help='references file -- multiple references separated by empty lines')
     ap.add_argument('sys_file', type=str, help='system output file to evaluate')
     args = ap.parse_args()
 
-    evaluate(args.ref_file, args.sys_file)
+    evaluate(args.ref_file, args.sys_file, args.src_file)
