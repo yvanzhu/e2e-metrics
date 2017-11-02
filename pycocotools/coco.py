@@ -51,6 +51,8 @@ from matplotlib.patches import Polygon
 import numpy as np
 from skimage.draw import polygon
 import copy
+import sys
+
 
 class COCO:
     def __init__(self, annotation_file=None):
@@ -68,16 +70,16 @@ class COCO:
         self.imgs = []
         self.cats = []
         if not annotation_file == None:
-            print 'loading annotations into memory...'
+            print >> sys.stderr, 'loading annotations into memory...'
             time_t = datetime.datetime.utcnow()
             dataset = json.load(open(annotation_file, 'r'))
-            print datetime.datetime.utcnow() - time_t
+            print >> sys.stderr, datetime.datetime.utcnow() - time_t
             self.dataset = dataset
             self.createIndex()
 
     def createIndex(self):
         # create index
-        print 'creating index...'
+        print >> sys.stderr, 'creating index...'
         imgToAnns = {ann['image_id']: [] for ann in self.dataset['annotations']}
         anns =      {ann['id']:       [] for ann in self.dataset['annotations']}
         for ann in self.dataset['annotations']:
@@ -98,7 +100,7 @@ class COCO:
             for ann in self.dataset['annotations']:
                 catToImgs[ann['category_id']] += [ann['image_id']]
 
-        print 'index created!'
+        print >> sys.stderr, 'index created!'
 
         # create class members
         self.anns = anns
@@ -113,7 +115,7 @@ class COCO:
         :return:
         """
         for key, value in self.datset['info'].items():
-            print '%s: %s'%(key, value)
+            print >> sys.stderr, '%s: %s'%(key, value)
 
     def getAnnIds(self, imgIds=[], catIds=[], areaRng=[], iscrowd=None):
         """
@@ -256,7 +258,7 @@ class COCO:
             #ax.add_collection(p)
         if self.dataset['type'] == 'captions':
             for ann in anns:
-                print ann['caption']
+                print >> sys.stderr, ann['caption']
 
     def loadRes(self, resFile):
         """
@@ -270,7 +272,7 @@ class COCO:
         res.dataset['type'] = copy.deepcopy(self.dataset['type'])
         res.dataset['licenses'] = copy.deepcopy(self.dataset['licenses'])
 
-        print 'Loading and preparing results...     '
+        print >> sys.stderr, 'Loading and preparing results...     '
         time_t = datetime.datetime.utcnow()
         anns    = json.load(open(resFile))
         assert type(anns) == list, 'results in not an array of objects'
@@ -298,7 +300,7 @@ class COCO:
                 ann['bbox'] = []
                 ann['id'] = id
                 ann['iscrowd'] = 0
-        print 'DONE (t=%0.2fs)'%((datetime.datetime.utcnow() - time_t).total_seconds())
+        print >> sys.stderr, 'DONE (t=%0.2fs)'%((datetime.datetime.utcnow() - time_t).total_seconds())
 
         res.dataset['annotations'] = anns
         res.createIndex()
