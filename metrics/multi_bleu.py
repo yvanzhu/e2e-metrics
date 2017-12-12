@@ -2,30 +2,45 @@
 # -*- coding: utf-8 -*-
 
 """
-BLEU measurements -- trying to reimplement Moses's multi-bleu-detok and
-its smoothed sentence-level version.
+BLEU & NIST measurements -- should be compatible with mteval-v13a.pl (basic tokenization).
+Also provides BLEU +1 smoothing (if set to work like that).
+
+TODO: International tokenization
+TODO: NIST with variable number of references is not the same as the edited mteval-v13a.pl,
+but this should be the proper way to compute it. Should be fixed there.
 """
 
 from __future__ import unicode_literals
 from collections import defaultdict
 import math
 import re
-import sys
 
 
 class NGramScore(object):
+    """Base class for BLEU & NIST, providing tokenization and some basic n-gram matching
+    functions."""
 
     def __init__(self, max_ngram, case_sensitive):
+        """Create the scoring object.
+        @param max_ngram: the n-gram level to compute the score for
+        @param case_sensitive: use case-sensitive matching?
+        """
         self.max_ngram = max_ngram
         self.case_sensitive = case_sensitive
 
     def reset(self):
+        """Reset the object, zero all counters."""
         raise NotImplementedError()
 
     def append(self, pred_sent, ref_sents):
+        """Add a sentence to the statistics.
+        @param pred_sent: system output / predicted sentence
+        @param ref_sents: reference sentences
+        """
         raise NotImplementedError()
 
     def score(self):
+        """Compute the current score based on sentences added so far."""
         raise NotImplementedError()
 
     def ngrams(self, n, sent):
@@ -105,12 +120,17 @@ class BLEUScore(NGramScore):
     SMALL = 1e-9
 
     def __init__(self, max_ngram=4, case_sensitive=False, smoothing=0.0):
+        """Create the scoring object.
+        @param max_ngram: the n-gram level to compute the score for (default: 4)
+        @param case_sensitive: use case-sensitive matching (default: no)
+        @param smoothing: constant to add for smoothing (defaults to 0.0, sentBLEU uses 1.0)
+        """
         super(BLEUScore, self).__init__(max_ngram, case_sensitive)
         self.smoothing = smoothing
         self.reset()
 
     def reset(self):
-        """Reset all counters."""
+        """Reset the object, zero all counters."""
         self.ref_len = 0
         self.cand_lens = [0] * self.max_ngram
         self.hits = [0] * self.max_ngram
@@ -134,6 +154,7 @@ class BLEUScore(NGramScore):
         self.ref_len += len(closest_ref)
 
     def score(self):
+        """Return the current BLEU score, according to the accumulated counts."""
         return self.bleu()
 
     def compute_hits(self, n, pred_sent, ref_sents):
@@ -154,7 +175,6 @@ class BLEUScore(NGramScore):
 
     def bleu(self):
         """Return the current BLEU score, according to the accumulated counts."""
-
         # brevity penalty (smoothed a bit: if candidate length is 0, we change it to 1e-5
         # to avoid division by zero)
         bp = 1.0
@@ -179,14 +199,21 @@ class BLEUScore(NGramScore):
 
 
 class NISTScore(NGramScore):
+    """An accumulator object capable of computing NIST score using multiple references."""
 
+    # NIST beta parameter setting (copied from mteval-13a.pl)
     BETA = - math.log(0.5) / math.log(1.5) ** 2
 
     def __init__(self, max_ngram=5, case_sensitive=False):
+        """Create the scoring object.
+        @param max_ngram: the n-gram level to compute the score for (default: 5)
+        @param case_sensitive: use case-sensitive matching (default: no)
+        """
         super(NISTScore, self).__init__(max_ngram, case_sensitive)
         self.reset()
 
     def reset(self):
+        """Reset the object, zero all counters."""
         self.ref_ngrams = [defaultdict(int) for _ in xrange(self.max_ngram + 1)]  # has 0-grams
         # these two don't have 0-grams
         self.hit_ngrams = [[] for _ in xrange(self.max_ngram)]
@@ -194,6 +221,11 @@ class NISTScore(NGramScore):
         self.avg_ref_len = 0.0
 
     def append(self, pred_sent, ref_sents):
+        """Append a sentence for measurements, increase counters.
+
+        @param pred_sent: the system output sentence (string/list of tokens)
+        @param ref_sents: the corresponding reference sentences (list of strings/lists of tokens)
+        """
         pred_sent, ref_sents = self.check_tokenized(pred_sent, ref_sents)
         # collect ngram matches
         for n in xrange(self.max_ngram):
@@ -218,15 +250,22 @@ class NISTScore(NGramScore):
         self.avg_ref_len += ref_len_sum / float(len(ref_sents))
 
     def score(self):
+        """Return the current NIST score, according to the accumulated counts."""
         return self.nist()
 
     def info(self, ngram):
+        """Return the NIST informativeness of an n-gram."""
         if ngram not in self.ref_ngrams[len(ngram)]:
             return 0.0
         return math.log(self.ref_ngrams[len(ngram) - 1][ngram[:-1]] /
                         float(self.ref_ngrams[len(ngram)][ngram]), 2)
 
     def nist_length_penalty(self, lsys, avg_lref):
+        """Compute the NIST length penalty, based on system output length & average reference length.
+        @param lsys: total system output length
+        @param avg_lref: total average reference length
+        @return: NIST length penalty term
+        """
         ratio = lsys / float(avg_lref)
         if ratio >= 1:
             return 1
@@ -235,6 +274,7 @@ class NISTScore(NGramScore):
         return math.exp(-self.BETA * math.log(ratio) ** 2)
 
     def nist(self):
+        """Return the current NIST score, according to the accumulated counts."""
         # 1st NIST term
         hit_infos = [0.0 for _ in xrange(self.max_ngram)]
         for n in xrange(self.max_ngram):
@@ -244,5 +284,4 @@ class NISTScore(NGramScore):
         nist_sum = sum(hit_info / total_len for hit_info, total_len in zip(hit_infos, total_lens))
         # length penalty term
         bp = self.nist_length_penalty(sum(self.cand_lens[0]), self.avg_ref_len)
-        print 'NIST SUM', nist_sum, 'LP', bp
         return bp * nist_sum
