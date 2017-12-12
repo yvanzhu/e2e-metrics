@@ -37,25 +37,36 @@ def read_lines(file_name, multi_ref=False):
 def read_and_check_tsv(sys_file, src_file):
     # read
     src_data = read_lines(src_file)
-    sys_data = [line.split("\t") for line in read_lines(sys_file) if line]  # ignore empty lines
+    sys_data = read_lines(sys_file)
+    sys_data[0] = re.sub(u'\ufeff', '', sys_data[0])  # remove unicode BOM
+    sys_data = [line.replace(u'Ł', u'£') for line in sys_data]  # fix Ł
+    sys_data = [line.replace(u'Â£', u'£') for line in sys_data]  # fix Â£
+    sys_data = [line.replace(u'Ã©', u'é') for line in sys_data]  # fix Ã©
+    sys_data = [line.replace(u'ã©', u'é') for line in sys_data]  # fix ã©
+    sys_data = [line.split("\t") for line in sys_data if line]  # split, ignore empty lines
+    if len([line for line in sys_data if len(line) == 1]) == len(sys_data):  # split CSV
+        sys_data = [line[0].split('","') for line in sys_data]
+
     if re.match(r'^"?mr', sys_data[0][0], re.I):  # ignore header
         sys_data = sys_data[1:]
 
     # check integrity
     if len(sys_data) != len(src_data):
-        raise ValueError('SYS data of different length than SRC: %d' % len(sys_data))
+        print "%s -- wrong data length" % sys_file
+        raise ValueError('%s -- SYS data of different length than SRC: %d' % (sys_file, len(sys_data)))
     errs = [line_no for line_no, item in enumerate(sys_data, start=1) if len(item) != 2]
     if errs:
-        raise ValueError('Weird number of values on lines: %s' % str(errs))
+        print "%s -- weird number of values" % sys_file
+        raise ValueError('%s -- Weird number of values on lines: %s' % (sys_file, str(errs)))
 
     # remove quotes
     sys_srcs = []
     sys_outs = []
     for sys_src, sys_out in sys_data:
-        sys_src = re.sub(r'^\s*"?\s*', r'', sys_src)
-        sys_src = re.sub(r'\s*"?\s*$', r'', sys_src)
-        sys_out = re.sub(r'^\s*"?\s*', r'', sys_out)
-        sys_out = re.sub(r'\s*"?\s*$', r'', sys_out)
+        sys_src = re.sub(r'^\s*[\'"]?\s*', r'', sys_src)
+        sys_src = re.sub(r'\s*[\'"]?\s*$', r'', sys_src)
+        sys_out = re.sub(r'^\s*[\'"]?\s*', r'', sys_out)
+        sys_out = re.sub(r'\s*[\'"]?\s*$', r'', sys_out)
         sys_srcs.append(sys_src)
         sys_outs.append(sys_out)
 
@@ -63,11 +74,13 @@ def read_and_check_tsv(sys_file, src_file):
     errs = [line_no for line_no, (sys, ref) in enumerate(zip(sys_srcs, src_data), start=1)
             if sys != ref]
     if errs:
-        raise ValueError('The SRC fields in SYS data are not the same as reference SRC on lines: %s' % str(errs))
+        print "%s -- SRC fields not the same as reference" % sys_file
+        raise ValueError('%s -- The SRC fields in SYS data are not the same as reference SRC on lines: %s' % (sys_file, str(errs)))
     # check quotes
     errs = [line_no for line_no, sys in enumerate(sys_outs, start=1) if '"' in sys]
     if errs:
-        raise ValueError('Quotes on lines: %s' % errs)
+        print "%s -- has quotes" % sys_file
+        raise ValueError('%s -- Quotes on lines: %s' % (sys_file, str(errs)))
 
     # return the checked data
     return sys_outs
