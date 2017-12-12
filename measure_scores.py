@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import codecs
-import json
 from argparse import ArgumentParser
 from tempfile import mkdtemp
 import os
@@ -13,6 +12,7 @@ import sys
 
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
+from metrics.pymteval import BLEUScore, NISTScore
 
 
 def read_lines(file_name, multi_ref=False):
@@ -70,7 +70,14 @@ def read_and_check_tsv(sys_file, src_file):
         raise ValueError('Quotes on lines: %s' % errs)
 
     # return the checked data
-    return sys_outs
+    return src_data, sys_outs
+
+
+def write_tsv(fname, header, data):
+    data.insert(0, header)
+    with codecs.open(fname, 'wb', 'UTF-8') as fh:
+        for item in data:
+            fh.write("\t".join(item) + "\n")
 
 
 def create_coco_refs(data_ref):
@@ -127,40 +134,30 @@ def create_mteval_file(refs, path, file_type):
         fh.write('</%s>' % settype)
 
 
-def evaluate(ref_file, sys_file, src_file=None):
-    """Main procedure, running the MS-COCO & MTEval evaluators on the given files."""
-
+def load_data(ref_file, sys_file, src_file=None):
+    """Load the data from the given files."""
     # read input files
     if src_file:
-        data_sys = read_and_check_tsv(sys_file, src_file)
+        data_src, data_sys = read_and_check_tsv(sys_file, src_file)
     else:
         data_sys = read_lines(sys_file)
+        # dummy source files (sources have no effect on measures, but MTEval wants them)
+        data_src = [''] * len(data_sys)
     data_ref = read_lines(ref_file, multi_ref=True)
-    # dummy source files (have no effect on measures, but MTEval wants them)
-    data_src = [''] * len(data_sys)
+
+    return data_src, data_ref, data_sys
+
+
+def evaluate(data_src, data_ref, data_sys):
+    """Main procedure, running the MS-COCO & MTEval evaluators on the loaded data."""
+
+    # run the MS-COCO evaluator
+    coco_eval = run_coco_eval(data_ref, data_sys)
+    scores = {metric: score for metric, score in coco_eval.eval.items()}
 
     # create temp directory
     temp_path = mkdtemp(prefix='e2e-eval-')
     print >> sys.stderr, 'Creating temp directory ', temp_path
-
-    # convert references to MS-COCO format in-memory
-    coco_ref = create_coco_refs(data_ref)
-    # create COCO test file (in a temporary file)
-    coco_sys = create_coco_sys(data_sys)
-    coco_sys_file = os.path.join(temp_path, 'coco_sys.json')
-    with open(coco_sys_file, 'wb') as coco_sys_fh:
-        json.dump(coco_sys, coco_sys_fh)
-
-    # run the MS-COCO evaluator
-    print >> sys.stderr, 'Running MS-COCO evaluator...'
-    coco = COCO()
-    coco.dataset = coco_ref
-    coco.createIndex()
-
-    coco_res = coco.loadRes(coco_sys_file)
-    coco_eval = COCOEvalCap(coco, coco_res)
-    coco_eval.evaluate()
-    scores = {metric: score for metric, score in coco_eval.eval.items()}
 
     # create MTEval files
     mteval_ref_file = os.path.join(temp_path, 'mteval_ref.sgm')
@@ -195,13 +192,66 @@ def evaluate(ref_file, sys_file, src_file=None):
     shutil.rmtree(temp_path)
 
 
+def run_coco_eval(data_ref, data_sys):
+    """Run the COCO evaluator, return the resulting evaluation object (contains both
+    system- and segment-level scores."""
+    # convert references and system outputs to MS-COCO format in-memory
+    coco_ref = create_coco_refs(data_ref)
+    coco_sys = create_coco_sys(data_sys)
+
+    print >> sys.stderr, 'Running MS-COCO evaluator...'
+    coco = COCO()
+    coco.dataset = coco_ref
+    coco.createIndex()
+
+    coco_res = coco.loadRes(resData=coco_sys)
+    coco_eval = COCOEvalCap(coco, coco_res)
+    coco_eval.evaluate()
+
+    return coco_eval
+
+
+def sent_level_scores(data_src, data_ref, data_sys, out_fname):
+    """Collect segment-level scores for the given data and write them out to a TSV file."""
+    res_data = []
+    headers = ['src', 'sys_out', 'BLEU', 'sentBLEU', 'NIST']
+    coco_scorers = ['METEOR', 'ROUGE_L', 'CIDEr']
+    mteval_scorers = [BLEUScore(), BLEUScore(smoothing=1.0), NISTScore()]
+    headers.extend(coco_scorers)
+
+    # prepare COCO scores
+    coco_eval = run_coco_eval(data_ref, data_sys)
+    # go through the segments
+    for inst_no, (sent_src, sents_ref, sent_sys) in enumerate(zip(data_src, data_ref, data_sys)):
+        res_line = [sent_src, sent_sys]
+        # run the PyMTEval scorers for the given segment
+        for scorer in mteval_scorers:
+            scorer.reset()
+            scorer.append(sent_sys, sents_ref)
+            res_line.append('%.4f' % scorer.score())
+        # extract the segment-level scores from the COCO object
+        for coco_scorer in coco_scorers:
+            res_line.append('%.4f' % coco_eval.imgToEval['inst-%d' % inst_no][coco_scorer])
+        # collect the results
+        res_data.append(res_line)
+    # write the output file
+    write_tsv(out_fname, headers, res_data)
+
+
 if __name__ == '__main__':
     ap = ArgumentParser(description='E2E Challenge evaluation -- MS-COCO & MTEval wrapper')
-    ap.add_argument('-s', '--src_file', type=str, help='source file -- if given, system output ' +
+    ap.add_argument('-l', '--sent-level', '--seg-level', '--sentence-level', '--segment-level',
+                    type=str, help='Output segment-level scores in a TSV format to the given file?',
+                    default=None)
+    ap.add_argument('-s', '--src-file', type=str, help='source file -- if given, system output ' +
                     'should be a TSV with source & output columns, source is checked for integrity',
                     default=None)
     ap.add_argument('ref_file', type=str, help='references file -- multiple references separated by empty lines')
     ap.add_argument('sys_file', type=str, help='system output file to evaluate')
     args = ap.parse_args()
 
-    evaluate(args.ref_file, args.sys_file, args.src_file)
+    data_src, data_ref, data_sys = load_data(args.ref_file, args.sys_file, args.src_file)
+    if args.sent_level is not None:
+        sent_level_scores(data_src, data_ref, data_sys, args.sent_level)
+    else:
+        evaluate(data_src, data_ref, data_sys)
