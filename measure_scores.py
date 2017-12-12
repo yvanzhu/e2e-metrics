@@ -140,7 +140,7 @@ def create_mteval_file(refs, path, file_type):
         fh.write('</%s>' % settype)
 
 
-def evaluate(ref_file, sys_file, src_file=None):
+def evaluate(ref_file, sys_file, src_file=None, print_as_table=False, print_table_header=False):
     """Main procedure, running the MS-COCO & MTEval evaluators on the given files."""
 
     # read input files
@@ -198,10 +198,16 @@ def evaluate(ref_file, sys_file, src_file=None):
     print >> sys.stderr, mteval_out
 
     # print out the results
-    print 'SCORES:\n=============='
-    for metric in ['BLEU', 'NIST', 'METEOR', 'ROUGE_L', 'CIDEr']:
-        print '%s: %.4f' % (metric, scores[metric])
-    print
+    metric_names = ['BLEU', 'NIST', 'METEOR', 'ROUGE_L', 'CIDEr']
+    if print_as_table:
+        if print_table_header:
+            print '\t'.join(['File'] + metric_names)
+        print '\t'.join([sys_file] + ['%.4f' % scores[metric] for metric in metric_names])
+    else:
+        print 'SCORES:\n=============='
+        for metric in metric_names:
+            print '%s: %.4f' % (metric, scores[metric])
+        print
 
     # delete the temporary directory
     print >> sys.stderr, 'Removing temp directory'
@@ -213,8 +219,10 @@ if __name__ == '__main__':
     ap.add_argument('-s', '--src_file', type=str, help='source file -- if given, system output ' +
                     'should be a TSV with source & output columns, source is checked for integrity',
                     default=None)
+    ap.add_argument('-t', '--table', action='store_true', help='print out results as a line in a table')
+    ap.add_argument('-H', '--header', action='store_true', help='print table header')
     ap.add_argument('ref_file', type=str, help='references file -- multiple references separated by empty lines')
     ap.add_argument('sys_file', type=str, help='system output file to evaluate')
     args = ap.parse_args()
 
-    evaluate(args.ref_file, args.sys_file, args.src_file)
+    evaluate(args.ref_file, args.sys_file, args.src_file, args.table, args.header)
