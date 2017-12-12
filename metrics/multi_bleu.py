@@ -3,24 +3,110 @@
 
 """
 BLEU measurements -- trying to reimplement Moses's multi-bleu-detok and
-
+its smoothed sentence-level version.
 """
 
 from __future__ import unicode_literals
 from collections import defaultdict
 import math
+import re
+import sys
 
 
+class NGramScore(object):
 
-class BLEUScore(object):
+    def __init__(self, max_ngram, case_sensitive):
+        self.max_ngram = max_ngram
+        self.case_sensitive = case_sensitive
+
+    def reset(self):
+        raise NotImplementedError()
+
+    def append(self, pred_sent, ref_sents):
+        raise NotImplementedError()
+
+    def score(self):
+        raise NotImplementedError()
+
+    def ngrams(self, n, sent):
+        """Given a sentence, return n-grams of nodes for the given N. Lowercases
+        everything if the measure should not be case-sensitive.
+
+        @param n: n-gram 'N' (1 for unigrams, 2 for bigrams etc.)
+        @param sent: the sent in question
+        @return: n-grams of nodes, as tuples of tuples (t-lemma & formeme)
+        """
+        if not self.case_sensitive:
+            return zip(*[[tok.lower() for tok in sent[i:]] for i in range(n)])
+        return zip(*[sent[i:] for i in range(n)])
+
+    def check_tokenized(self, pred_sent, ref_sents):
+        """Tokenize the predicted sentence and reference sentences, if they are not tokenized.
+        @param pred_sent: system output / predicted sentence
+        @param ref_sent: a list of corresponding reference sentences
+        @return: a tuple of (pred_sent, ref_sent) where everything is tokenized
+        """
+        # tokenize if needed
+        pred_sent = pred_sent if isinstance(pred_sent, list) else self.tokenize(pred_sent)
+        ref_sents = [ref_sent if isinstance(ref_sent, list) else self.tokenize(ref_sent)
+                     for ref_sent in ref_sents]
+        return pred_sent, ref_sents
+
+    def get_ngram_counts(self, n, sents):
+        """Returns a dictionary with counts of all n-grams in the given sentences.
+        @param n: the "n" in n-grams (how long the n-grams should be)
+        @param sents: list of sentences for n-gram counting
+        @return: a dictionary (ngram: count) listing counts of n-grams attested in any of the sentences
+        """
+        merged_ngrams = {}
+
+        for sent in sents:
+            ngrams = defaultdict(int)
+
+            for ngram in self.ngrams(n, sent):
+                ngrams[ngram] += 1
+            for ngram, cnt in ngrams.iteritems():
+                merged_ngrams[ngram] = max((merged_ngrams.get(ngram, 0), cnt))
+        return merged_ngrams
+
+    def tokenize(self, sent):
+        """This tries to mimic multi-bleu-detok from Moses, and by extension mteval-v13b.
+        Code taken directly from there and attempted rewrite into Python."""
+        # language-independent part:
+        sent = re.sub(r'<skipped>', r'', sent)  # strip "skipped" tags
+        sent = re.sub(r'-\n', r'', sent)  # strip end-of-line hyphenation and join lines
+        sent = re.sub(r'\n', r' ', sent)  # join lines
+        sent = re.sub(r'&quot;', r'"', sent)  # convert SGML tag for quote to "
+        sent = re.sub(r'&amp;', r'&', sent)  # convert SGML tag for ampersand to &
+        sent = re.sub(r'&lt;', r'<', sent)  # convert SGML tag for less-than to >
+        sent = re.sub(r'&gt;', r'>', sent)  # convert SGML tag for greater-than to <
+
+        # language-dependent part (assuming Western languages):
+        sent = " " + sent + " "  # pad with spaces
+        sent = re.sub(r'([\{-\~\[-\` -\&\(-\+\:-\@\/])', r' \1 ', sent)  # tokenize punctuation
+        sent = re.sub(r'([^0-9])([\.,])', r'\1 \2 ', sent)  # tokenize period and comma unless preceded by a digit
+        sent = re.sub(r'([\.,])([^0-9])', r' \1 \2', sent)  # tokenize period and comma unless followed by a digit
+        sent = re.sub(r'([0-9])(-)', r'\1 \2 ', sent)  # tokenize dash when preceded by a digit
+        sent = re.sub(r'\s+', r' ', sent)  # one space only between words
+        sent = sent.strip()  # remove padding
+
+        return sent.split(' ')
+
+
+class BLEUScore(NGramScore):
     """An accumulator object capable of computing BLEU score using multiple references.
 
-    The BLEU score is smoothed a bit so that it's not undefined when there are zero matches
-    for a particular n-gram count, or when the predicted sentence is empty.
+    The BLEU score is always smoothed a bit so that it's never undefined. For sentence-level
+    measurements, proper smoothing should be used via the smoothing parameter (set to 1.0 for
+    the same behavior as default Moses's MERT sentence BLEU).
     """
 
-    def __init__(self, max_ngram=4):
-        self.max_ngram=max_ngram
+    TINY = 1e-15
+    SMALL = 1e-9
+
+    def __init__(self, max_ngram=4, case_sensitive=False, smoothing=0.0):
+        super(BLEUScore, self).__init__(max_ngram, case_sensitive)
+        self.smoothing = smoothing
         self.reset()
 
     def reset(self):
@@ -32,17 +118,23 @@ class BLEUScore(object):
     def append(self, pred_sent, ref_sents):
         """Append a sentence for measurements, increase counters.
 
-        @param pred_sent: the system output sentence (tree/tokens)
-        @param ref_sents: the corresponding reference sentences (list/tuple of trees/tokens)
+        @param pred_sent: the system output sentence (string/list of tokens)
+        @param ref_sents: the corresponding reference sentences (list of strings/lists of tokens)
         """
+        pred_sent, ref_sents = self.check_tokenized(pred_sent, ref_sents)
 
+        # compute n-gram matches
         for i in xrange(self.max_ngram):
-            self.hits[i] += self.compute_hits(i+1, pred_sent, ref_sents)
+            self.hits[i] += self.compute_hits(i + 1, pred_sent, ref_sents)
             self.cand_lens[i] += len(pred_sent) - i
 
         # take the reference that is closest in length to the candidate
-        closest_ref = min(ref_sents, key=lambda ref_sent: abs(len(ref_sent) - len(pred_sent)))
+        # (if there are two of the same distance, take the shorter one)
+        closest_ref = min(ref_sents, key=lambda ref_sent: (abs(len(ref_sent) - len(pred_sent)), len(ref_sent)))
         self.ref_len += len(closest_ref)
+
+    def score(self):
+        return self.bleu()
 
     def compute_hits(self, n, pred_sent, ref_sents):
         """Compute clipped n-gram hits for the given sentences and the given N
@@ -51,36 +143,14 @@ class BLEUScore(object):
         @param pred_sent: the system output sentence (tree/tokens)
         @param ref_sents: the corresponding reference sentences (list/tuple of trees/tokens)
         """
-        merged_ref_ngrams = {}
-
-        for ref_sent in ref_sents:
-            ref_ngrams = defaultdict(int)
-
-            for ngram in self.ngrams(n, ref_sent):
-                ref_ngrams[ngram] += 1
-            for ngram, cnt in ref_ngrams.iteritems():
-                merged_ref_ngrams[ngram] = max((merged_ref_ngrams.get(ngram, 0), cnt))
-
-        pred_ngrams = defaultdict(int)
-        for ngram in self.ngrams(n, pred_sent):
-            pred_ngrams[ngram] += 1
+        merged_ref_ngrams = self.get_ngram_counts(n, ref_sents)
+        pred_ngrams = self.get_ngram_counts(n, [pred_sent])
 
         hits = 0
         for ngram, cnt in pred_ngrams.iteritems():
             hits += min(merged_ref_ngrams.get(ngram, 0), cnt)
 
         return hits
-
-    def ngrams(self, n, sent):
-        """Given a sentence, return n-grams of nodes for the given N
-
-        @param n: n-gram 'N' (1 for unigrams, 2 for bigrams etc.)
-        @param sent: the sent in question
-        @return: n-grams of nodes, as tuples of tuples (t-lemma & formeme)
-        """
-        if not isinstance(sent, list):
-            sent = self.tokenize(sent)
-        return zip(*[sent[i:] for i in range(n)])
 
     def bleu(self):
         """Return the current BLEU score, according to the accumulated counts."""
@@ -97,12 +167,82 @@ class BLEUScore(object):
     def ngram_precision(self):
         """Return the current n-gram precision (harmonic mean of n-gram precisions up to max_ngram)
         according to the accumulated counts."""
+        prec_log_sum = 0.0
+        for n_hits, n_len in zip(self.hits, self.cand_lens):
+            n_hits += self.smoothing  # pre-set smoothing
+            n_len += self.smoothing
+            n_hits = max(n_hits, self.TINY)  # forced smoothing just a litle to make BLEU defined
+            n_len = max(n_len, self.SMALL)   # only applied for zeros
+            prec_log_sum += math.log(n_hits / n_len)
 
-        # n-gram precision is smoothed a bit: 0 hits for a given n-gram count are
-        # changed to 1e-5 to make BLEU defined everywhere
-        prec_avg = sum(1.0 / self.max_ngram *
-                       math.log((n_hits if n_hits != 0 else 1e-5) / float(max(n_lens, 1.0)))
-                       for n_hits, n_lens in zip(self.hits, self.cand_lens))
+        return math.exp((1.0 / self.max_ngram) * prec_log_sum)
 
-        return math.exp(prec_avg)
 
+class NISTScore(NGramScore):
+
+    BETA = - math.log(0.5) / math.log(1.5) ** 2
+
+    def __init__(self, max_ngram=5, case_sensitive=False):
+        super(NISTScore, self).__init__(max_ngram, case_sensitive)
+        self.reset()
+
+    def reset(self):
+        self.ref_ngrams = [defaultdict(int) for _ in xrange(self.max_ngram + 1)]  # has 0-grams
+        # these two don't have 0-grams
+        self.hit_ngrams = [[] for _ in xrange(self.max_ngram)]
+        self.cand_lens = [[] for _ in xrange(self.max_ngram)]
+        self.avg_ref_len = 0.0
+
+    def append(self, pred_sent, ref_sents):
+        pred_sent, ref_sents = self.check_tokenized(pred_sent, ref_sents)
+        # collect ngram matches
+        for n in xrange(self.max_ngram):
+            self.cand_lens[n].append(len(pred_sent) - n)  # keep track of output length
+            merged_ref_ngrams = self.get_ngram_counts(n + 1, ref_sents)
+            pred_ngrams = self.get_ngram_counts(n + 1, [pred_sent])
+            # collect ngram matches
+            hit_ngrams = {}
+            for ngram in pred_ngrams:
+                hits = min(pred_ngrams[ngram], merged_ref_ngrams.get(ngram, 0))
+                if hits:
+                    hit_ngrams[ngram] = hits
+            self.hit_ngrams[n].append(hit_ngrams)
+            # collect total reference ngram counts
+            for ref_sent in ref_sents:
+                for ngram in self.ngrams(n + 1, ref_sent):
+                    self.ref_ngrams[n + 1][ngram] += 1
+        # ref_ngrams: use 0-grams for information value as well
+        ref_len_sum = sum(len(ref_sent) for ref_sent in ref_sents)
+        self.ref_ngrams[0][()] += ref_len_sum
+        # collect average reference length
+        self.avg_ref_len += ref_len_sum / float(len(ref_sents))
+
+    def score(self):
+        return self.nist()
+
+    def info(self, ngram):
+        if ngram not in self.ref_ngrams[len(ngram)]:
+            return 0.0
+        return math.log(self.ref_ngrams[len(ngram) - 1][ngram[:-1]] /
+                        float(self.ref_ngrams[len(ngram)][ngram]), 2)
+
+    def nist_length_penalty(self, lsys, avg_lref):
+        ratio = lsys / float(avg_lref)
+        if ratio >= 1:
+            return 1
+        if ratio <= 0:
+            return 0
+        return math.exp(-self.BETA * math.log(ratio) ** 2)
+
+    def nist(self):
+        # 1st NIST term
+        hit_infos = [0.0 for _ in xrange(self.max_ngram)]
+        for n in xrange(self.max_ngram):
+            for hit_ngrams in self.hit_ngrams[n]:
+                hit_infos[n] += sum(self.info(ngram) * hits for ngram, hits in hit_ngrams.iteritems())
+        total_lens = [sum(self.cand_lens[n]) for n in xrange(self.max_ngram)]
+        nist_sum = sum(hit_info / total_len for hit_info, total_len in zip(hit_infos, total_lens))
+        # length penalty term
+        bp = self.nist_length_penalty(sum(self.cand_lens[0]), self.avg_ref_len)
+        print 'NIST SUM', nist_sum, 'LP', bp
+        return bp * nist_sum
