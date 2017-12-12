@@ -260,12 +260,14 @@ class COCO:
             for ann in anns:
                 print >> sys.stderr, ann['caption']
 
-    def loadRes(self, resFile):
+    def loadRes(self, resFile=None, resData=None):
         """
         Load result file and return a result api object.
         :param   resFile (str)     : file name of result file
+        :param   resData (obj)     : pre-loaded result data
         :return: res (obj)         : result api object
         """
+        assert resFile or resData, 'must be provided result data in a list or a path to result file'
         res = COCO()
         res.dataset['images'] = [img for img in self.dataset['images']]
         res.dataset['info'] = copy.deepcopy(self.dataset['info'])
@@ -274,7 +276,10 @@ class COCO:
 
         print >> sys.stderr, 'Loading and preparing results...     '
         time_t = datetime.datetime.utcnow()
-        anns    = json.load(open(resFile))
+        if resData:
+            anns = resData
+        else:
+            anns = json.load(open(resFile))
         assert type(anns) == list, 'results in not an array of objects'
         annsImgIds = [ann['image_id'] for ann in anns]
         assert set(annsImgIds) == (set(annsImgIds) & set(self.getImgIds())), \
