@@ -157,18 +157,44 @@ def load_data(ref_file, sys_file, src_file=None):
         # dummy source files (sources have no effect on measures, but MTEval wants them)
         data_src = [''] * len(data_sys)
     data_ref = read_lines(ref_file, multi_ref=True)
-
+    if len(data_ref) == 1:  # this was apparently a single-ref file -> fix the structure
+        data_ref = [[inst] for inst in data_ref[0]]
+    # TODO: use TSV file to provide references
+    assert(len(data_ref) == len(data_sys) == len(data_src))
     return data_src, data_ref, data_sys
 
 
 def evaluate(data_src, data_ref, data_sys,
-             print_as_table=False, print_table_header=False, sys_fname=''):
+             print_as_table=False, print_table_header=False, sys_fname='',
+             python=False):
     """Main procedure, running the MS-COCO & MTEval evaluators on the loaded data."""
 
     # run the MS-COCO evaluator
     coco_eval = run_coco_eval(data_ref, data_sys)
     scores = {metric: score for metric, score in coco_eval.eval.items()}
 
+    # run MT-Eval (original or Python)
+    if python:
+        mteval_scores = run_pymteval(data_ref, data_sys)
+    else:
+        mteval_scores = run_mteval(data_ref, data_sys, data_src)
+    scores.update(mteval_scores)
+
+    # print out the results
+    metric_names = ['BLEU', 'NIST', 'METEOR', 'ROUGE_L', 'CIDEr']
+    if print_as_table:
+        if print_table_header:
+            print '\t'.join(['File'] + metric_names)
+        print '\t'.join([sys_fname] + ['%.4f' % scores[metric] for metric in metric_names])
+    else:
+        print 'SCORES:\n=============='
+        for metric in metric_names:
+            print '%s: %.4f' % (metric, scores[metric])
+        print
+
+
+def run_mteval(data_ref, data_sys, data_src):
+    """Run document-level BLEU and NIST via mt-eval13b (Perl)."""
     # create temp directory
     temp_path = mkdtemp(prefix='e2e-eval-')
     print >> sys.stderr, 'Creating temp directory ', temp_path
@@ -191,25 +217,31 @@ def evaluate(data_src, data_ref, data_sys,
                                           '-s', mteval_src_file,
                                           '-t', mteval_sys_file,
                                           '-f', mteval_log_file], stderr=subprocess.STDOUT)
-    scores['NIST'] = float(re.search(r'NIST score = ([0-9.]+)', mteval_out).group(1))
-    scores['BLEU'] = float(re.search(r'BLEU score = ([0-9.]+)', mteval_out).group(1))
+    nist = float(re.search(r'NIST score = ([0-9.]+)', mteval_out).group(1))
+    bleu = float(re.search(r'BLEU score = ([0-9.]+)', mteval_out).group(1))
     print >> sys.stderr, mteval_out
-
-    # print out the results
-    metric_names = ['BLEU', 'NIST', 'METEOR', 'ROUGE_L', 'CIDEr']
-    if print_as_table:
-        if print_table_header:
-            print '\t'.join(['File'] + metric_names)
-        print '\t'.join([sys_fname] + ['%.4f' % scores[metric] for metric in metric_names])
-    else:
-        print 'SCORES:\n=============='
-        for metric in metric_names:
-            print '%s: %.4f' % (metric, scores[metric])
-        print
 
     # delete the temporary directory
     print >> sys.stderr, 'Removing temp directory'
     shutil.rmtree(temp_path)
+
+    return {'NIST': nist, 'BLEU': bleu}
+
+
+def run_pymteval(data_ref, data_sys):
+    """Run document-level BLEU and NIST in their Python implementation (should give the
+    same results as Perl)."""
+    print >> sys.stderr, 'Running Py-MTEval metrics...'
+    bleu = BLEUScore()
+    nist = NISTScore()
+
+    # collect statistics
+    for sents_ref, sent_sys in zip(data_ref, data_sys):
+        bleu.append(sent_sys, sents_ref)
+        nist.append(sent_sys, sents_ref)
+
+    # return the computed scores
+    return {'NIST': nist.score(), 'BLEU': bleu.score()}
 
 
 def run_coco_eval(data_ref, data_sys):
@@ -266,6 +298,8 @@ if __name__ == '__main__':
     ap.add_argument('-s', '--src-file', type=str, help='source file -- if given, system output ' +
                     'should be a TSV with source & output columns, source is checked for integrity',
                     default=None)
+    ap.add_argument('-p', '--python', action='store_true',
+                    help='use Python implementation of MTEval instead of Perl')
     ap.add_argument('-t', '--table', action='store_true', help='print out results as a line in a table')
     ap.add_argument('-H', '--header', action='store_true', help='print table header')
     ap.add_argument('ref_file', type=str, help='references file -- multiple references separated by empty lines')
@@ -276,4 +310,4 @@ if __name__ == '__main__':
     if args.sent_level is not None:
         sent_level_scores(data_src, data_ref, data_sys, args.sent_level)
     else:
-        evaluate(data_src, data_ref, data_sys, args.table, args.header, args.sys_file)
+        evaluate(data_src, data_ref, data_sys, args.table, args.header, args.sys_file, args.python)
