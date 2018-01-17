@@ -34,56 +34,78 @@ def read_lines(file_name, multi_ref=False):
     return buf
 
 
-def read_and_check_tsv(sys_file, src_file):
-    # read
-    src_data = read_lines(src_file)
-    sys_data = read_lines(sys_file)
-    sys_data[0] = re.sub(u'\ufeff', '', sys_data[0])  # remove unicode BOM
-    sys_data = [line.replace(u'Ł', u'£') for line in sys_data]  # fix Ł
-    sys_data = [line.replace(u'Â£', u'£') for line in sys_data]  # fix Â£
-    sys_data = [line.replace(u'Ã©', u'é') for line in sys_data]  # fix Ã©
-    sys_data = [line.replace(u'ã©', u'é') for line in sys_data]  # fix ã©
-    sys_data = [line.split("\t") for line in sys_data if line]  # split, ignore empty lines
-    if len([line for line in sys_data if len(line) == 1]) == len(sys_data):  # split CSV
-        sys_data = [line[0].split('","') for line in sys_data]
+def read_tsv(tsv_file):
+    """Read a TSV file, check basic integrity."""
+    tsv_data = read_lines(tsv_file)
+    tsv_data[0] = re.sub(u'\ufeff', '', tsv_data[0])  # remove unicode BOM
+    tsv_data = [line.replace(u'Ł', u'£') for line in tsv_data]  # fix Ł
+    tsv_data = [line.replace(u'Â£', u'£') for line in tsv_data]  # fix Â£
+    tsv_data = [line.replace(u'Ã©', u'é') for line in tsv_data]  # fix Ã©
+    tsv_data = [line.replace(u'ã©', u'é') for line in tsv_data]  # fix ã©
+    tsv_data = [line.split("\t") for line in tsv_data if line]  # split, ignore empty lines
+    if len([line for line in tsv_data if len(line) == 1]) == len(tsv_data):  # split CSV
+        tsv_data = [line[0].split('","') for line in tsv_data]
 
-    if re.match(r'^"?mr', sys_data[0][0], re.I):  # ignore header
-        sys_data = sys_data[1:]
+    if re.match(r'^"?mr', tsv_data[0][0], re.I):  # ignore header
+        tsv_data = tsv_data[1:]
 
-    # check integrity
-    if len(sys_data) != len(src_data):
-        print "%s -- wrong data length" % sys_file
-        raise ValueError('%s -- SYS data of different length than SRC: %d' % (sys_file, len(sys_data)))
-    errs = [line_no for line_no, item in enumerate(sys_data, start=1) if len(item) != 2]
+    errs = [line_no for line_no, item in enumerate(tsv_data, start=1) if len(item) != 2]
     if errs:
-        print "%s -- weird number of values" % sys_file
-        raise ValueError('%s -- Weird number of values on lines: %s' % (sys_file, str(errs)))
+        print "%s -- weird number of values" % tsv_file
+        raise ValueError('%s -- Weird number of values on lines: %s' % (tsv_file, str(errs)))
 
     # remove quotes
-    sys_srcs = []
-    sys_outs = []
-    for sys_src, sys_out in sys_data:
-        sys_src = re.sub(r'^\s*[\'"]?\s*', r'', sys_src)
-        sys_src = re.sub(r'\s*[\'"]?\s*$', r'', sys_src)
-        sys_out = re.sub(r'^\s*[\'"]?\s*', r'', sys_out)
-        sys_out = re.sub(r'\s*[\'"]?\s*$', r'', sys_out)
-        sys_srcs.append(sys_src)
-        sys_outs.append(sys_out)
+    srcs = []
+    refs = []
+    for src, ref in tsv_data:
+        src = re.sub(r'^\s*[\'"]?\s*', r'', src)
+        src = re.sub(r'\s*[\'"]?\s*$', r'', src)
+        ref = re.sub(r'^\s*[\'"]?\s*', r'', ref)
+        ref = re.sub(r'\s*[\'"]?\s*$', r'', ref)
+        srcs.append(src)
+        refs.append(ref)
+    # check quotes
+    errs = [line_no for line_no, sys in enumerate(refs, start=1) if '"' in sys]
+    if errs:
+        print "%s -- has quotes" % tsv_file
+        raise ValueError('%s -- Quotes on lines: %s' % (tsv_file, str(errs)))
 
+    return srcs, refs
+
+
+def read_and_check_tsv(sys_file, src_file):
+    """Read system outputs from a TSV file, check that MRs correspond to a source file."""
+    # read
+    src_data = read_lines(src_file)
+    sys_srcs, sys_outs = read_tsv(sys_file)
+    # check integrity
+    if len(sys_outs) != len(src_data):
+        print "%s -- wrong data length" % sys_file
+        raise ValueError('%s -- SYS data of different length than SRC: %d' % (sys_file, len(sys_outs)))
     # check sameness
     errs = [line_no for line_no, (sys, ref) in enumerate(zip(sys_srcs, src_data), start=1)
             if sys != ref]
     if errs:
         print "%s -- SRC fields not the same as reference" % sys_file
         raise ValueError('%s -- The SRC fields in SYS data are not the same as reference SRC on lines: %s' % (sys_file, str(errs)))
-    # check quotes
-    errs = [line_no for line_no, sys in enumerate(sys_outs, start=1) if '"' in sys]
-    if errs:
-        print "%s -- has quotes" % sys_file
-        raise ValueError('%s -- Quotes on lines: %s' % (sys_file, str(errs)))
 
     # return the checked data
     return src_data, sys_outs
+
+
+def read_and_group_tsv(ref_file):
+    """Read a TSV file with references (and MRs), group the references according to identical MRs
+    on consecutive lines."""
+    ref_srcs, ref_sents = read_tsv(ref_file)
+    refs = []
+    cur_src = None
+    for src, ref in zip(ref_srcs, ref_sents):
+        if src != cur_src:
+            refs.append([ref])
+            cur_src = src
+        else:
+            refs[-1].append(ref)
+    return refs
 
 
 def write_tsv(fname, header, data):
@@ -149,17 +171,25 @@ def create_mteval_file(refs, path, file_type):
 
 def load_data(ref_file, sys_file, src_file=None):
     """Load the data from the given files."""
-    # read input files
+    # read SRC/SYS files
     if src_file:
         data_src, data_sys = read_and_check_tsv(sys_file, src_file)
+    elif re.search('\.[ct]sv$', sys_file, re.I):
+        data_src, data_sys = read_tsv(sys_file)
     else:
         data_sys = read_lines(sys_file)
         # dummy source files (sources have no effect on measures, but MTEval wants them)
         data_src = [''] * len(data_sys)
-    data_ref = read_lines(ref_file, multi_ref=True)
-    if len(data_ref) == 1:  # this was apparently a single-ref file -> fix the structure
-        data_ref = [[inst] for inst in data_ref[0]]
-    # TODO: use TSV file to provide references
+
+    # read REF file
+    if re.search('\.[ct]sv$', ref_file, re.I):
+        data_ref = read_and_group_tsv(ref_file)
+    else:
+        data_ref = read_lines(ref_file, multi_ref=True)
+        if len(data_ref) == 1:  # this was apparently a single-ref file -> fix the structure
+            data_ref = [[inst] for inst in data_ref[0]]
+
+    # sanity check
     assert(len(data_ref) == len(data_sys) == len(data_src))
     return data_src, data_ref, data_sys
 
