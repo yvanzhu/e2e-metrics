@@ -325,15 +325,20 @@ if __name__ == '__main__':
     ap.add_argument('-l', '--sent-level', '--seg-level', '--sentence-level', '--segment-level',
                     type=str, help='Output segment-level scores in a TSV format to the given file?',
                     default=None)
-    ap.add_argument('-s', '--src-file', type=str, help='source file -- if given, system output ' +
+    ap.add_argument('-s', '--src-file', type=str, help='Source file -- if given, system output ' +
                     'should be a TSV with source & output columns, source is checked for integrity',
                     default=None)
     ap.add_argument('-p', '--python', action='store_true',
-                    help='use Python implementation of MTEval instead of Perl')
-    ap.add_argument('-t', '--table', action='store_true', help='print out results as a line in a table')
-    ap.add_argument('-H', '--header', action='store_true', help='print table header')
-    ap.add_argument('ref_file', type=str, help='references file -- multiple references separated by empty lines')
-    ap.add_argument('sys_file', type=str, help='system output file to evaluate')
+                    help='Use Python implementation of MTEval instead of Perl?')
+    ap.add_argument('-t', '--table', action='store_true', help='Print out results as a line in a'
+                    'TSV table?')
+    ap.add_argument('-H', '--header', action='store_true', help='Print TSV table header?')
+    ap.add_argument('ref_file', type=str, help='References file -- multiple references separated ' +
+                    'by empty lines (or single-reference with no empty lines). Can also be a TSV ' +
+                    'file with source & reference columns. In that case, consecutive identical ' +
+                    'SRC columns are grouped as multiple references for the same source.')
+    ap.add_argument('sys_file', type=str, help='System output file to evaluate (text file with ' +
+                    'one output per line, or a TSV file with sources & corresponding outputs).')
     args = ap.parse_args()
 
     data_src, data_ref, data_sys = load_data(args.ref_file, args.sys_file, args.src_file)
