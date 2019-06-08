@@ -12,7 +12,7 @@ Running the evaluation
 
 The metrics script requires the following dependencies:
 - Java 1.8
-- Python 2.7 with [matplotlib](https://pypi.python.org/pypi/matplotlib) and [scikit-image](https://pypi.python.org/pypi/scikit-image) packages
+- Python **3.6+** with [matplotlib](https://pypi.python.org/pypi/matplotlib) and [scikit-image](https://pypi.python.org/pypi/scikit-image) packages
 - Perl 5.8.8 or higher with the [XML::Twig](http://search.cpan.org/~mirod/XML-Twig-3.49/Twig.pm) CPAN module
 
 

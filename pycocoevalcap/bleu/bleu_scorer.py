@@ -15,7 +15,13 @@
 cook_refs(refs, n=4): Transform a list of reference sentences as strings into a form usable by cook_test().
 cook_test(test, refs, n=4): Transform a test sentence as a string (together with the cooked reference sentences) into a form usable by score_cooked().
 '''
+from __future__ import division
+from __future__ import print_function
 
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import copy
 import sys, math, re
 from collections import defaultdict
@@ -26,8 +32,8 @@ def precook(s, n=4, out=False):
     can take string arguments as well."""
     words = s.split()
     counts = defaultdict(int)
-    for k in xrange(1,n+1):
-        for i in xrange(len(words)-k+1):
+    for k in range(1,n+1):
+        for i in range(len(words)-k+1):
             ngram = tuple(words[i:i+k])
             counts[ngram] += 1
     return (len(words), counts)
@@ -42,7 +48,7 @@ def cook_refs(refs, eff=None, n=4): ## lhuang: oracle will call with "average"
     for ref in refs:
         rl, counts = precook(ref, n)
         reflen.append(rl)
-        for (ngram,count) in counts.iteritems():
+        for (ngram,count) in counts.items():
             maxcounts[ngram] = max(maxcounts.get(ngram,0), count)
 
     # Calculate effective reference sentence length.
@@ -57,10 +63,10 @@ def cook_refs(refs, eff=None, n=4): ## lhuang: oracle will call with "average"
 
     return (reflen, maxcounts)
 
-def cook_test(test, (reflen, refmaxcounts), eff=None, n=4):
+def cook_test(test, xxx_todo_changeme, eff=None, n=4):
     '''Takes a test sentence and returns an object that
     encapsulates everything that BLEU needs to know about it.'''
-
+    (reflen, refmaxcounts) = xxx_todo_changeme
     testlen, counts = precook(test, n, True)
 
     result = {}
@@ -74,10 +80,10 @@ def cook_test(test, (reflen, refmaxcounts), eff=None, n=4):
 
     result["testlen"] = testlen
 
-    result["guess"] = [max(0,testlen-k+1) for k in xrange(1,n+1)]
+    result["guess"] = [max(0,testlen-k+1) for k in range(1,n+1)]
 
     result['correct'] = [0]*n
-    for (ngram, count) in counts.iteritems():
+    for (ngram, count) in counts.items():
         result["correct"][len(ngram)-1] += min(refmaxcounts.get(ngram,0), count)
 
     return result
@@ -224,40 +230,39 @@ class BleuScorer(object):
             self._reflen += reflen
                 
             for key in ['guess','correct']:
-                for k in xrange(n):
+                for k in range(n):
                     totalcomps[key][k] += comps[key][k]
 
             # append per image bleu score
             bleu = 1.
-            for k in xrange(n):
-                bleu *= (float(comps['correct'][k]) + tiny) \
-                        /(float(comps['guess'][k]) + small) 
+            for k in range(n):
+                bleu *= old_div((float(comps['correct'][k]) + tiny),(float(comps['guess'][k]) + small)) 
                 bleu_list[k].append(bleu ** (1./(k+1)))
-            ratio = (testlen + tiny) / (reflen + small) ## N.B.: avoid zero division
+            ratio = old_div((testlen + tiny), (reflen + small)) ## N.B.: avoid zero division
             if ratio < 1:
-                for k in xrange(n):
-                    bleu_list[k][-1] *= math.exp(1 - 1/ratio)
+                for k in range(n):
+                    bleu_list[k][-1] *= math.exp(1 - old_div(1,ratio))
 
             if verbose > 1:
-                print comps, reflen
+                print(comps, reflen)
 
         totalcomps['reflen'] = self._reflen
         totalcomps['testlen'] = self._testlen
 
         bleus = []
         bleu = 1.
-        for k in xrange(n):
+        for k in range(n):
             bleu *= float(totalcomps['correct'][k] + tiny) \
                     / (totalcomps['guess'][k] + small)
             bleus.append(bleu ** (1./(k+1)))
-        ratio = (self._testlen + tiny) / (self._reflen + small) ## N.B.: avoid zero division
+        ratio = old_div((self._testlen + tiny), (self._reflen + small)) ## N.B.: avoid zero division
         if ratio < 1:
-            for k in xrange(n):
-                bleus[k] *= math.exp(1 - 1/ratio)
+            for k in range(n):
+                bleus[k] *= math.exp(1 - old_div(1,ratio))
 
         if verbose > 0:
-            print totalcomps
-            print "ratio:", ratio
+            print(totalcomps)
+            print("ratio:", ratio)
 
         self._score = bleus
         return self._score, bleu_list

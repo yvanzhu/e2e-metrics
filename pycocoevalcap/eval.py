@@ -1,12 +1,16 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import zip
+from builtins import object
 __author__ = 'tylin'
-from tokenizer.ptbtokenizer import PTBTokenizer
-from bleu.bleu import Bleu
-from meteor.meteor import Meteor
-from rouge.rouge import Rouge
-from cider.cider import Cider
+from .tokenizer.ptbtokenizer import PTBTokenizer
+from .bleu.bleu import Bleu
+from .meteor.meteor import Meteor
+from .rouge.rouge import Rouge
+from .cider.cider import Cider
 import sys
 
-class COCOEvalCap:
+class COCOEvalCap(object):
     def __init__(self, coco, cocoRes):
         self.evalImgs = []
         self.eval = {}
@@ -27,7 +31,7 @@ class COCOEvalCap:
         # =================================================
         # Set up scorers
         # =================================================
-        print >> sys.stderr, 'tokenization...'
+        print('tokenization...', file=sys.stderr)
         tokenizer = PTBTokenizer()
         gts  = tokenizer.tokenize(gts)
         res = tokenizer.tokenize(res)
@@ -35,7 +39,7 @@ class COCOEvalCap:
         # =================================================
         # Set up scorers
         # =================================================
-        print >> sys.stderr, 'setting up scorers...'
+        print('setting up scorers...', file=sys.stderr)
         scorers = [
             (Meteor(),"METEOR"),
             (Rouge(), "ROUGE_L"),
@@ -46,17 +50,17 @@ class COCOEvalCap:
         # Compute scores
         # =================================================
         for scorer, method in scorers:
-            print >> sys.stderr, 'computing %s score...'%(scorer.method())
+            print('computing %s score...'%(scorer.method()), file=sys.stderr)
             score, scores = scorer.compute_score(gts, res)
             if type(method) == list:
                 for sc, scs, m in zip(score, scores, method):
                     self.setEval(sc, m)
-                    self.setImgToEvalImgs(scs, gts.keys(), m)
-                    print >> sys.stderr, "%s: %0.3f"%(m, sc)
+                    self.setImgToEvalImgs(scs, list(gts.keys()), m)
+                    print("%s: %0.3f"%(m, sc), file=sys.stderr)
             else:
                 self.setEval(score, method)
-                self.setImgToEvalImgs(scores, gts.keys(), method)
-                print >> sys.stderr, "%s: %0.3f"%(method, score)
+                self.setImgToEvalImgs(scores, list(gts.keys()), method)
+                print("%s: %0.3f"%(method, score), file=sys.stderr)
         self.setEvalImgs()
 
     def setEval(self, score, method):
@@ -70,4 +74,4 @@ class COCOEvalCap:
             self.imgToEval[imgId][method] = score
 
     def setEvalImgs(self):
-        self.evalImgs = [eval for imgId, eval in self.imgToEval.items()]
+        self.evalImgs = [eval for imgId, eval in list(self.imgToEval.items())]

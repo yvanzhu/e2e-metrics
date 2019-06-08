@@ -11,6 +11,11 @@ but this should be the proper way to compute it. Should be fixed there.
 """
 
 from __future__ import unicode_literals
+from __future__ import division
+from builtins import zip
+from builtins import range
+from past.utils import old_div
+from builtins import object
 from collections import defaultdict
 import math
 import re
@@ -52,8 +57,8 @@ class NGramScore(object):
         @return: n-grams of nodes, as tuples of tuples (t-lemma & formeme)
         """
         if not self.case_sensitive:
-            return zip(*[[tok.lower() for tok in sent[i:]] for i in range(n)])
-        return zip(*[sent[i:] for i in range(n)])
+            return list(zip(*[[tok.lower() for tok in sent[i:]] for i in range(n)]))
+        return list(zip(*[sent[i:] for i in range(n)]))
 
     def check_tokenized(self, pred_sent, ref_sents):
         """Tokenize the predicted sentence and reference sentences, if they are not tokenized.
@@ -80,7 +85,7 @@ class NGramScore(object):
 
             for ngram in self.ngrams(n, sent):
                 ngrams[ngram] += 1
-            for ngram, cnt in ngrams.iteritems():
+            for ngram, cnt in ngrams.items():
                 merged_ngrams[ngram] = max((merged_ngrams.get(ngram, 0), cnt))
         return merged_ngrams
 
@@ -144,7 +149,7 @@ class BLEUScore(NGramScore):
         pred_sent, ref_sents = self.check_tokenized(pred_sent, ref_sents)
 
         # compute n-gram matches
-        for i in xrange(self.max_ngram):
+        for i in range(self.max_ngram):
             self.hits[i] += self.compute_hits(i + 1, pred_sent, ref_sents)
             self.cand_lens[i] += len(pred_sent) - i
 
@@ -168,7 +173,7 @@ class BLEUScore(NGramScore):
         pred_ngrams = self.get_ngram_counts(n, [pred_sent])
 
         hits = 0
-        for ngram, cnt in pred_ngrams.iteritems():
+        for ngram, cnt in pred_ngrams.items():
             hits += min(merged_ref_ngrams.get(ngram, 0), cnt)
 
         return hits
@@ -179,8 +184,8 @@ class BLEUScore(NGramScore):
         # to avoid division by zero)
         bp = 1.0
         if (self.cand_lens[0] <= self.ref_len):
-            bp = math.exp(1.0 - self.ref_len /
-                          (float(self.cand_lens[0]) if self.cand_lens[0] else 1e-5))
+            bp = math.exp(1.0 - old_div(self.ref_len,
+                          (float(self.cand_lens[0]) if self.cand_lens[0] else 1e-5)))
 
         return bp * self.ngram_precision()
 
@@ -193,7 +198,7 @@ class BLEUScore(NGramScore):
             n_len += self.smoothing
             n_hits = max(n_hits, self.TINY)  # forced smoothing just a litle to make BLEU defined
             n_len = max(n_len, self.SMALL)   # only applied for zeros
-            prec_log_sum += math.log(n_hits / n_len)
+            prec_log_sum += math.log(old_div(n_hits, n_len))
 
         return math.exp((1.0 / self.max_ngram) * prec_log_sum)
 
@@ -202,7 +207,7 @@ class NISTScore(NGramScore):
     """An accumulator object capable of computing NIST score using multiple references."""
 
     # NIST beta parameter setting (copied from mteval-13a.pl)
-    BETA = - math.log(0.5) / math.log(1.5) ** 2
+    BETA = old_div(- math.log(0.5), math.log(1.5) ** 2)
 
     def __init__(self, max_ngram=5, case_sensitive=False):
         """Create the scoring object.
@@ -214,10 +219,10 @@ class NISTScore(NGramScore):
 
     def reset(self):
         """Reset the object, zero all counters."""
-        self.ref_ngrams = [defaultdict(int) for _ in xrange(self.max_ngram + 1)]  # has 0-grams
+        self.ref_ngrams = [defaultdict(int) for _ in range(self.max_ngram + 1)]  # has 0-grams
         # these two don't have 0-grams
-        self.hit_ngrams = [[] for _ in xrange(self.max_ngram)]
-        self.cand_lens = [[] for _ in xrange(self.max_ngram)]
+        self.hit_ngrams = [[] for _ in range(self.max_ngram)]
+        self.cand_lens = [[] for _ in range(self.max_ngram)]
         self.avg_ref_len = 0.0
 
     def append(self, pred_sent, ref_sents):
@@ -228,7 +233,7 @@ class NISTScore(NGramScore):
         """
         pred_sent, ref_sents = self.check_tokenized(pred_sent, ref_sents)
         # collect ngram matches
-        for n in xrange(self.max_ngram):
+        for n in range(self.max_ngram):
             self.cand_lens[n].append(len(pred_sent) - n)  # keep track of output length
             merged_ref_ngrams = self.get_ngram_counts(n + 1, ref_sents)
             pred_ngrams = self.get_ngram_counts(n + 1, [pred_sent])
@@ -276,12 +281,12 @@ class NISTScore(NGramScore):
     def nist(self):
         """Return the current NIST score, according to the accumulated counts."""
         # 1st NIST term
-        hit_infos = [0.0 for _ in xrange(self.max_ngram)]
-        for n in xrange(self.max_ngram):
+        hit_infos = [0.0 for _ in range(self.max_ngram)]
+        for n in range(self.max_ngram):
             for hit_ngrams in self.hit_ngrams[n]:
-                hit_infos[n] += sum(self.info(ngram) * hits for ngram, hits in hit_ngrams.iteritems())
-        total_lens = [sum(self.cand_lens[n]) for n in xrange(self.max_ngram)]
-        nist_sum = sum(hit_info / total_len for hit_info, total_len in zip(hit_infos, total_lens))
+                hit_infos[n] += sum(self.info(ngram) * hits for ngram, hits in hit_ngrams.items())
+        total_lens = [sum(self.cand_lens[n]) for n in range(self.max_ngram)]
+        nist_sum = sum(old_div(hit_info, total_len) for hit_info, total_len in zip(hit_infos, total_lens))
         # length penalty term
         bp = self.nist_length_penalty(sum(self.cand_lens[0]), self.avg_ref_len)
         return bp * nist_sum

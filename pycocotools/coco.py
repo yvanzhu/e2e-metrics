@@ -1,3 +1,8 @@
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+from builtins import object
+from past.utils import old_div
 __author__ = 'tylin'
 __version__ = '1.0.1'
 # Interface for accessing the Microsoft COCO dataset.
@@ -54,7 +59,7 @@ import copy
 import sys
 
 
-class COCO:
+class COCO(object):
     def __init__(self, annotation_file=None):
         """
         Constructor of Microsoft COCO helper class for reading and visualizing annotations.
@@ -70,16 +75,16 @@ class COCO:
         self.imgs = []
         self.cats = []
         if not annotation_file == None:
-            print >> sys.stderr, 'loading annotations into memory...'
+            print('loading annotations into memory...', file=sys.stderr)
             time_t = datetime.datetime.utcnow()
             dataset = json.load(open(annotation_file, 'r'))
-            print >> sys.stderr, datetime.datetime.utcnow() - time_t
+            print(datetime.datetime.utcnow() - time_t, file=sys.stderr)
             self.dataset = dataset
             self.createIndex()
 
     def createIndex(self):
         # create index
-        print >> sys.stderr, 'creating index...'
+        print('creating index...', file=sys.stderr)
         imgToAnns = {ann['image_id']: [] for ann in self.dataset['annotations']}
         anns =      {ann['id']:       [] for ann in self.dataset['annotations']}
         for ann in self.dataset['annotations']:
@@ -100,7 +105,7 @@ class COCO:
             for ann in self.dataset['annotations']:
                 catToImgs[ann['category_id']] += [ann['image_id']]
 
-        print >> sys.stderr, 'index created!'
+        print('index created!', file=sys.stderr)
 
         # create class members
         self.anns = anns
@@ -114,8 +119,8 @@ class COCO:
         Print information about the annotation file.
         :return:
         """
-        for key, value in self.dataset['info'].items():
-            print >> sys.stderr, '%s: %s'%(key, value)
+        for key, value in list(self.dataset['info'].items()):
+            print('%s: %s'%(key, value), file=sys.stderr)
 
     def getAnnIds(self, imgIds=[], catIds=[], areaRng=[], iscrowd=None):
         """
@@ -180,7 +185,7 @@ class COCO:
         catIds = catIds if type(catIds) == list else [catIds]
 
         if len(imgIds) == len(catIds) == 0:
-            ids = self.imgs.keys()
+            ids = list(self.imgs.keys())
         else:
             ids = set(imgIds)
             for catId in catIds:
@@ -240,7 +245,7 @@ class COCO:
                 if type(ann['segmentation']) == list:
                     # polygon
                     for seg in ann['segmentation']:
-                        poly = np.array(seg).reshape((len(seg)/2, 2))
+                        poly = np.array(seg).reshape((old_div(len(seg),2), 2))
                         polygons.append(Polygon(poly, True,alpha=0.4))
                         color.append(c)
                 else:
@@ -248,7 +253,7 @@ class COCO:
                     mask = COCO.decodeMask(ann['segmentation'])
                     img = np.ones( (mask.shape[0], mask.shape[1], 3) )
                     if ann['iscrowd'] == 1:
-                        color_mask = np.array([2.0,166.0,101.0])/255
+                        color_mask = old_div(np.array([2.0,166.0,101.0]),255)
                     if ann['iscrowd'] == 0:
                         color_mask = np.random.random((1, 3)).tolist()[0]
                     for i in range(3):
@@ -258,7 +263,7 @@ class COCO:
             #ax.add_collection(p)
         if self.dataset['type'] == 'captions':
             for ann in anns:
-                print >> sys.stderr, ann['caption']
+                print(ann['caption'], file=sys.stderr)
 
     def loadRes(self, resFile=None, resData=None):
         """
@@ -274,7 +279,7 @@ class COCO:
         res.dataset['type'] = copy.deepcopy(self.dataset['type'])
         res.dataset['licenses'] = copy.deepcopy(self.dataset['licenses'])
 
-        print >> sys.stderr, 'Loading and preparing results...     '
+        print('Loading and preparing results...     ', file=sys.stderr)
         time_t = datetime.datetime.utcnow()
         if resData:
             anns = resData
@@ -305,7 +310,7 @@ class COCO:
                 ann['bbox'] = []
                 ann['id'] = id
                 ann['iscrowd'] = 0
-        print >> sys.stderr, 'DONE (t=%0.2fs)'%((datetime.datetime.utcnow() - time_t).total_seconds())
+        print('DONE (t=%0.2fs)'%((datetime.datetime.utcnow() - time_t).total_seconds()), file=sys.stderr)
 
         res.dataset['annotations'] = anns
         res.createIndex()
