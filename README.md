@@ -30,13 +30,27 @@ cpanm XML::Twig
 
 ### Usage ###
 
-The main entry point is [measure_scores.py](measure_scores.py). The script assumes one instance
-per line for your system outputs and one entry per line, multiple references for the same instance
+The main entry point is [measure_scores.py](measure_scores.py). To get a listing of all available options,
+run:
+```
+./measure_scores.py -h
+```
+
+The system outputs and human references can either be in a TSV/CSV format, or in plain text. This is 
+distinguished by the file extension (plain text assumed, unless it's `.tsv` or `.csv`).
+
+For TSV/CSV, the script assumes that the first column contains source MRs/texts and the second column
+contains system outputs or references. Multiple references for the same source MRs/texts are grouped automatically.
+Headers containing “MR” are ignored (if your header doesn't contain the text “MR”, it will be considered
+as the first data point).
+
+For plain text files, the script assumes one instance
+per line for your system outputs and one entry per line or multiple references for the same instance
 separated by empty lines for the references (see 
 [TGen data conversion](https://github.com/UFAL-DSG/tgen/blob/master/e2e-challenge/README.md)).
-Example human reference and system output files are provided in the [example-inputs](example-inputs/)
-subdirectory.
 
+Example human reference and system output files are provided in the [example-inputs](example-inputs/)
+subdirectory -- you can try the script on them using this command:
 ```
 ./measure_scores.py example-inputs/devel-conc.txt example-inputs/baseline-output.txt
 ```
