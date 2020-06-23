@@ -12,10 +12,16 @@ import shutil
 import subprocess
 import re
 import sys
+import csv
 
 from pycocotools.coco import COCO
 from pycocoevalcap.eval import COCOEvalCap
 from metrics.pymteval import BLEUScore, NISTScore
+
+# CSV headers
+HEADER_SRC = r'(mr|src|source|meaning(?:[_ .-]rep(?:resentation)?)?|da|dial(?:ogue)?[_ .-]act)s?'
+HEADER_SYS = r'(out(?:put)?|ref(?:erence)?|sys(?:tem)?(?:[_ .-](?:out(?:put)?|ref(?:erence)?))?)s?'
+HEADER_REF = r'(trg|tgt|target|ref(?:erence)?|human(?:[_ .-](?:ref(?:erence)?))?)s?'
 
 
 def read_lines(file_name, multi_ref=False):
@@ -37,7 +43,7 @@ def read_lines(file_name, multi_ref=False):
     return buf
 
 
-def read_tsv(tsv_file):
+def read_tsv(tsv_file, header_src, header_ref):
     """Read a TSV file, check basic integrity."""
     tsv_data = read_lines(tsv_file)
     tsv_data[0] = re.sub(u'\ufeff', '', tsv_data[0])  # remove unicode BOM
@@ -45,34 +51,47 @@ def read_tsv(tsv_file):
     tsv_data = [line.replace(u'Â£', u'£') for line in tsv_data]  # fix Â£
     tsv_data = [line.replace(u'Ã©', u'é') for line in tsv_data]  # fix Ã©
     tsv_data = [line.replace(u'ã©', u'é') for line in tsv_data]  # fix ã©
-    tsv_data = [line.split("\t") for line in tsv_data if line]  # split, ignore empty lines
-    if len([line for line in tsv_data if len(line) == 1]) == len(tsv_data):  # split CSV
-        tsv_data = [line[0].split('","') for line in tsv_data]
+    tsv_data = [line for line in tsv_data if line]  # ignore empty lines
+    reader = csv.reader(tsv_data, delimiter=("\t" if "\t" in tsv_data[0] else ","))  # parse CSV/TSV
+    tsv_data = [row for row in reader]  # convert back to list
 
-    if re.match(r'^"?mr', tsv_data[0][0], re.I):  # ignore header
+    # check which columns are which (if headers are present)
+    src_match_cols = [idx for idx, field in enumerate(tsv_data[0]) if re.match(header_src, field, re.I)]
+    ref_match_cols = [idx for idx, field in enumerate(tsv_data[0]) if re.match(header_ref, field, re.I)]
+
+    # we need to find exactly 1 column of each desired type, or exactly 0 of each
+    if not ((len(src_match_cols) == len(ref_match_cols) == 0) or (len(src_match_cols) == len(ref_match_cols) == 1)):
+        raise ValueError(("Strange column arrangement in %s: columns [%s] match src pattern `%s`, "
+                          + "columns [%s] match ref pattern `%s`")
+                         % (tsv_file, ','.join(src_match_cols), header_src,
+                            ','.join(ref_match_cols), header_ref))
+
+    num_cols = len(tsv_data[0])  # this should be the number of columns in the whole file
+    # if we didn't find any headers, the number of columns must be 2
+    if src_match_cols == ref_match_cols == 0:
+        src_col = 0
+        ref_col = 1
+        if num_cols != 2:
+            raise ValueError("File %s can't have no header and more than 2 columns" % tsv_file)
+
+    # if we did find headers, just strip them and remember which columns to extract
+    else:
+        src_col = src_match_cols[0]
+        ref_col = ref_match_cols[0]
         tsv_data = tsv_data[1:]
 
-    errs = [line_no for line_no, item in enumerate(tsv_data, start=1) if len(item) != 2]
+    # check the correct number of columns throughout the file
+    errs = [line_no for line_no, item in enumerate(tsv_data, start=1) if len(item) != num_cols]
     if errs:
-        print("%s -- weird number of values" % tsv_file)
-        raise ValueError('%s -- Weird number of values on lines: %s' % (tsv_file, str(errs)))
+        print("%s -- weird number of columns" % tsv_file)
+        raise ValueError('%s -- Weird number of columns on lines: %s' % (tsv_file, str(errs)))
 
-    # remove quotes
+    # extract the data
     srcs = []
     refs = []
-    for src, ref in tsv_data:
-        src = re.sub(r'^\s*[\'"]?\s*', r'', src)
-        src = re.sub(r'\s*[\'"]?\s*$', r'', src)
-        ref = re.sub(r'^\s*[\'"]?\s*', r'', ref)
-        ref = re.sub(r'\s*[\'"]?\s*$', r'', ref)
-        srcs.append(src)
-        refs.append(ref)
-    # check quotes
-    errs = [line_no for line_no, sys in enumerate(refs, start=1) if '"' in sys]
-    if errs:
-        print("%s -- has quotes" % tsv_file)
-        raise ValueError('%s -- Quotes on lines: %s' % (tsv_file, str(errs)))
-
+    for row in tsv_data:
+        srcs.append(row[src_col])
+        refs.append(row[ref_col])
     return srcs, refs
 
 
@@ -80,7 +99,7 @@ def read_and_check_tsv(sys_file, src_file):
     """Read system outputs from a TSV file, check that MRs correspond to a source file."""
     # read
     src_data = read_lines(src_file)
-    sys_srcs, sys_outs = read_tsv(sys_file)
+    sys_srcs, sys_outs = read_tsv(sys_file, HEADER_SRC, HEADER_SYS)
     # check integrity
     if len(sys_outs) != len(src_data):
         print("%s -- wrong data length" % sys_file)
@@ -96,18 +115,27 @@ def read_and_check_tsv(sys_file, src_file):
     return src_data, sys_outs
 
 
-def read_and_group_tsv(ref_file):
+def read_and_group_tsv(ref_file, sys_srcs):
     """Read a TSV file with references (and MRs), group the references according to identical MRs
     on consecutive lines."""
-    ref_srcs, ref_sents = read_tsv(ref_file)
+    ref_srcs, ref_sents = read_tsv(ref_file, HEADER_SRC, HEADER_REF)
     refs = []
-    cur_src = None
-    for src, ref in zip(ref_srcs, ref_sents):
-        if src != cur_src:
-            refs.append([ref])
-            cur_src = src
-        else:
-            refs[-1].append(ref)
+    if any([inst != '' for inst in sys_srcs]):  # data file has real sources -- we reorder according to them
+        refs_dict = {}
+        for src, ref in zip(ref_srcs, ref_sents):
+            refs_dict[src] = refs_dict.get(src, []) + [ref]
+        for src in sys_srcs:
+            if src not in refs_dict:
+                raise ValueError("Didn't find a reference for source '%s' in %s" % (src, ref_file))
+            refs.append(refs_dict[src])
+    else:  # sources from the data file are fake -- can't do any regrouping, taking the order from CSV
+        cur_src = None
+        for src, ref in zip(ref_srcs, ref_sents):
+            if src != cur_src:
+                refs.append([ref])
+                cur_src = src
+            else:
+                refs[-1].append(ref)
     return refs
 
 
@@ -178,7 +206,7 @@ def load_data(ref_file, sys_file, src_file=None):
     if src_file:
         data_src, data_sys = read_and_check_tsv(sys_file, src_file)
     elif re.search('\.[ct]sv$', sys_file, re.I):
-        data_src, data_sys = read_tsv(sys_file)
+        data_src, data_sys = read_tsv(sys_file, HEADER_SRC, HEADER_SYS)
     else:
         data_sys = read_lines(sys_file)
         # dummy source files (sources have no effect on measures, but MTEval wants them)
@@ -186,7 +214,7 @@ def load_data(ref_file, sys_file, src_file=None):
 
     # read REF file
     if re.search('\.[ct]sv$', ref_file, re.I):
-        data_ref = read_and_group_tsv(ref_file)
+        data_ref = read_and_group_tsv(ref_file, data_src)
     else:
         data_ref = read_lines(ref_file, multi_ref=True)
         if len(data_ref) == 1:  # this was apparently a single-ref file -> fix the structure

@@ -40,9 +40,12 @@ The system outputs and human references can either be in a TSV/CSV format, or in
 distinguished by the file extension (plain text assumed, unless it's `.tsv` or `.csv`).
 
 For TSV/CSV, the script assumes that the first column contains source MRs/texts and the second column
-contains system outputs or references. Multiple references for the same source MRs/texts are grouped automatically.
-Headers containing “MR” are ignored (if your header doesn't contain the text “MR”, it will be considered
-as the first data point).
+contains system outputs or references. Multiple references for the same source MRs/texts are grouped automatically
+(either by the same source as in the system output file, if it's also a TSV/CSV, or by consecutive identical
+sources).
+If there are headers in the TSV/CSV file with reasonably identifiable labels (e.g. “MR”, “source”, 
+“system output”, “reference” etc., there's some guessing involved), the columns should be identified automatically.
+In that case, the file doesn't need to have just two columns in the exact order.
 
 For plain text files, the script assumes one instance
 per line for your system outputs and one entry per line or multiple references for the same instance
