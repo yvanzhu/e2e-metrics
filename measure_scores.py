@@ -63,8 +63,8 @@ def read_tsv(tsv_file, header_src, header_ref):
     if not ((len(src_match_cols) == len(ref_match_cols) == 0) or (len(src_match_cols) == len(ref_match_cols) == 1)):
         raise ValueError(("Strange column arrangement in %s: columns [%s] match src pattern `%s`, "
                           + "columns [%s] match ref pattern `%s`")
-                         % (tsv_file, ','.join(src_match_cols), header_src,
-                            ','.join(ref_match_cols), header_ref))
+                         % (tsv_file, ','.join([str(c) for c in src_match_cols]), header_src,
+                            ','.join([str(c) for c in ref_match_cols]), header_ref))
 
     num_cols = len(tsv_data[0])  # this should be the number of columns in the whole file
     # if we didn't find any headers, the number of columns must be 2
